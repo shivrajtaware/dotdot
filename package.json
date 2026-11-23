@@ -1,0 +1,19 @@
+{
+  "name": "krushinath-sugar-house",
+  "private": true,
+  "workspaces": ["apps/web", "apps/api"],
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c green,cyan \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:web": "npm --workspace apps/web run dev",
+    "dev:api": "npm --workspace apps/api run dev",
+    "test": "npm --workspace apps/api test && npm --workspace apps/web test",
+    "test:e2e": "npm --workspace apps/api run test:e2e",
+    "build": "npm --workspace apps/api run build && npm --workspace apps/web run build",
+    "db:generate": "npm --workspace apps/api run db:generate",
+    "db:migrate": "npm --workspace apps/api run db:migrate",
+    "android:add": "npm --workspace apps/web run android:add",
+    "android:sync": "npm --workspace apps/web run android:sync",
+    "android:open": "npm --workspace apps/web run android:open"
+  },
+  "devDependencies": { "concurrently": "^9.1.2" }
+}

@@ -1,0 +1,228 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  MANAGER
+  CHEMIST
+  VIEWER
+}
+enum RecordStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  LOCKED
+}
+enum MovementType {
+  OPENING
+  PRODUCTION
+  DISPATCH
+  ADJUSTMENT
+}
+
+model User {
+  id String @id @default(cuid())
+  email String @unique
+  passwordHash String
+  name String
+  role Role
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  records ShiftRecord[] @relation("ClerkRecords")
+  chemistShifts ShiftDefinition[] @relation("ShiftChemist")
+  assignedChemistryRecords ShiftRecord[] @relation("AssignedShiftChemist")
+  acknowledgements Handover[]
+  audits AuditLog[]
+  sessions RefreshSession[]
+  @@index([role, active])
+}
+model RefreshSession {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId, expiresAt])
+}
+model Season {
+  id String @id @default(cuid())
+  name String @unique
+  startDate DateTime
+  endDate DateTime?
+  active Boolean @default(true)
+  openingStock Json @default("{}")
+  openingCumulative Json
+  createdAt DateTime @default(now())
+  records ShiftRecord[]
+  movements InventoryMovement[]
+}
+model FactorySetting {
+  id String @id @default(cuid())
+  key String @unique
+  value Json
+  updatedAt DateTime @updatedAt
+}
+model ShiftDefinition {
+  id String @id @default(cuid())
+  label String @unique
+  startsAt String
+  endsAt String
+  sortOrder Int
+  active Boolean @default(true)
+  chemistId String?
+  chemist User? @relation("ShiftChemist", fields: [chemistId], references: [id], onDelete: SetNull)
+  records ShiftRecord[]
+  @@index([chemistId])
+}
+model Grade {
+  id String @id @default(cuid())
+  code String @unique
+  label String
+  active Boolean @default(true)
+  order Int
+  stocks StockLine[]
+  movements InventoryMovement[]
+}
+model ShiftRecord {
+  id String @id @default(cuid())
+  registerNo Int @unique @default(autoincrement())
+  productionDate DateTime @db.Date
+  offlineId String? @unique
+  scaleCheckTime String?
+  account String @default("Production")
+  clerkId String
+  clerkNameSnapshot String
+  clerk User @relation("ClerkRecords", fields: [clerkId], references: [id])
+  assignedChemistId String?
+  assignedChemistNameSnapshot String?
+  assignedChemist User? @relation("AssignedShiftChemist", fields: [assignedChemistId], references: [id], onDelete: SetNull)
+  shiftId String
+  shiftLabelSnapshot String
+  shiftStartsAtSnapshot String
+  shiftEndsAtSnapshot String
+  shiftSortOrderSnapshot Int
+  shift ShiftDefinition @relation(fields: [shiftId], references: [id])
+  seasonId String
+  season Season @relation(fields: [seasonId], references: [id])
+  status RecordStatus @default(DRAFT)
+  timeEntries ProductionEntry[]
+  stockLines StockLine[]
+  operational OperationalCount[]
+  references RegisterReference[]
+  handovers Handover[]
+  remarks String?
+  adjustmentReason String?
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  approvedAt DateTime?
+  @@unique([productionDate, shiftId])
+  @@index([productionDate, status])
+  @@index([clerkId, productionDate])
+  @@index([assignedChemistId, status])
+}
+model StockLine {
+  id String @id @default(cuid())
+  recordId String
+  record ShiftRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  gradeId String
+  grade Grade @relation(fields: [gradeId], references: [id])
+  opening Int @default(0)
+  production Int @default(0)
+  available Int @default(0)
+  dispatch Int @default(0)
+  closing Int @default(0)
+  @@unique([recordId, gradeId])
+}
+model ProductionEntry {
+  id String @id @default(cuid())
+  recordId String
+  record ShiftRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  entryTime String
+  fromNumber Int
+  toNumber Int
+  bags Int
+  order Int
+}
+model OperationalCount {
+  id String @id @default(cuid())
+  recordId String
+  record ShiftRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  code String
+  labelSnapshot String
+  bags Int
+  @@unique([recordId, code])
+}
+model RegisterReference {
+  id String @id @default(cuid())
+  recordId String
+  record ShiftRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  code String
+  labelSnapshot String
+  referenceDate DateTime? @db.Date
+  numberValue Int?
+  @@unique([recordId, code])
+}
+model InventoryMovement {
+  id String @id @default(cuid())
+  gradeId String
+  grade Grade @relation(fields: [gradeId], references: [id])
+  seasonId String?
+  season Season? @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+  recordId String?
+  productionDate DateTime @db.Date
+  type MovementType
+  quantity Int
+  balanceAfter Int
+  reason String?
+  createdBy String
+  createdAt DateTime @default(now())
+  @@index([gradeId, productionDate])
+  @@index([seasonId, productionDate])
+}
+model Handover {
+  id String @id @default(cuid())
+  recordId String
+  record ShiftRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  kind String
+  userId String
+  employeeNameSnapshot String
+  employeeRoleSnapshot Role
+  user User @relation(fields: [userId], references: [id])
+  acknowledgedAt DateTime @default(now())
+  signatureData String?
+  @@unique([recordId, kind])
+}
+model CorrectionRequest {
+  id String @id @default(cuid())
+  recordId String
+  requestedBy String
+  reason String
+  proposedValues Json
+  approvedBy String?
+  approvedAt DateTime?
+  rejectedBy String?
+  rejectedAt DateTime?
+  resolutionReason String?
+  createdAt DateTime @default(now())
+}
+model AuditLog {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  action String
+  recordId String?
+  previousValues Json?
+  updatedValues Json?
+  reason String?
+  createdAt DateTime @default(now())
+  @@index([recordId, createdAt])
+}
