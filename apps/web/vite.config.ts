@@ -5,12 +5,16 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const apiBase = (process.env.VITE_API_BASE_URL || env.VITE_API_BASE_URL || '').trim();
 
-  if (mode === 'production') {
+  if (mode === 'production' && apiBase.startsWith('/')) {
+    if (apiBase.replace(/\/+$/, '') !== '/api') {
+      throw new Error('A relative VITE_API_BASE_URL must be exactly /api for same-origin API routing.');
+    }
+  } else if (mode === 'production') {
     let parsed: URL;
     try {
       parsed = new URL(apiBase);
     } catch {
-      throw new Error('Set VITE_API_BASE_URL to the deployed HTTPS API base URL ending in /api before building for production.');
+      throw new Error('Set VITE_API_BASE_URL to /api or to a deployed HTTPS API base URL ending in /api before building for production.');
     }
 
     const host = parsed.hostname.toLowerCase();

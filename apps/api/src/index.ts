@@ -22,7 +22,18 @@ const dayStart = (date: string) => new Date(`${date}T00:00:00.000Z`);
 const dayEnd = (date: string) => new Date(`${date}T23:59:59.999Z`);
 app.use(helmet());
 const allowedOrigins = [...(process.env.WEB_ORIGIN || 'http://localhost:5173').split(','), ...(process.env.MOBILE_ORIGIN || 'https://localhost').split(',')].map(x => x.trim()).filter(Boolean);
-app.use(cors({ origin: (origin, callback) => !origin || allowedOrigins.includes(origin) ? callback(null, true) : callback(new Error('Origin is not allowed.')), credentials: true }));
+const corsForAllowedClients = cors({ origin: (origin, callback) => !origin || allowedOrigins.includes(origin) ? callback(null, true) : callback(new Error('Origin is not allowed.')), credentials: true });
+app.use((req, res, next) => {
+  const origin = req.get('origin');
+  if (origin) {
+    try {
+      // The web app and API share one public origin behind Nginx. Keep
+      // same-origin requests CORS-simple so temporary tunnel hostnames work.
+      if (new URL(origin).host === req.get('host')) return next();
+    } catch { /* Reject malformed origins through the configured CORS policy. */ }
+  }
+  corsForAllowedClients(req, res, next);
+});
 app.use(express.json({ limit: '1mb' }));
 app.use('/api/auth', rateLimit({ windowMs: 15 * 60 * 1000, limit: 30 }));
 

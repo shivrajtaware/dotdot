@@ -20,14 +20,14 @@ The owner account is created only on the first seed and only with non-template `
 
 ### Docker Compose on a Linux server
 
-The repository includes a Compose deployment with a private PostgreSQL container, API and static web containers, database readiness checks, and automatic migration deployment before API startup. The database has no published host port. API and web ports bind to `127.0.0.1` so a host TLS reverse proxy can serve the purchased domains.
+The repository includes a Compose deployment with a private PostgreSQL container, API and static web containers, database readiness checks, and automatic migration deployment before API startup. The database has no published host port. The web container serves the app and proxies `/api` to the API, so browser traffic uses one hostname.
 
 1. Install Docker Engine with the Docker Compose plugin on the server and point the web and API DNS records to that server.
-2. Copy `deploy/.env.production.example` to `deploy/.env.production`. Replace all sample values. Set the real HTTPS web/API domains, generate distinct JWT secrets, use an alphanumeric database password, and enter verified opening and cumulative balances. Leave `CONFIRM_INITIAL_BALANCES=false` until every grade balance has been checked against the factory book.
+2. Copy `deploy/.env.production.example` to `deploy/.env.production`. Replace all sample values. Set `WEB_ORIGIN` to the public web URL, generate distinct JWT secrets, use an alphanumeric database password, and enter verified opening and cumulative balances. Keep `VITE_API_BASE_URL=/api`. Leave `CONFIRM_INITIAL_BALANCES=false` until every grade balance has been checked against the factory book.
 3. Validate the Compose configuration and start the services: `docker compose --env-file deploy/.env.production config --quiet`, then `docker compose --env-file deploy/.env.production up -d --build db api web`.
 4. After verifying the opening values, change `CONFIRM_INITIAL_BALANCES=true`, replace `OWNER_EMAIL` with the actual owner email and set a unique owner password. Run the one-time initializer: `docker compose --env-file deploy/.env.production --profile bootstrap run --rm seed`. The initializer refuses template owner credentials and unconfirmed balances. It does not run automatically on container startup.
-5. Configure the host TLS proxy to forward the web domain to `http://127.0.0.1:8080` and the API domain to `http://127.0.0.1:4000`. Redirect HTTP to HTTPS and retain the `/api` path when proxying API requests. Restrict the server firewall to SSH and HTTPS; PostgreSQL remains on the private Compose network.
-6. Check API readiness at `https://<api-domain>/api/health`; it reports healthy only when PostgreSQL responds. Back up the `postgres_data` database using `pg_dump` and store backups outside this server.
+5. Configure the host TLS proxy to forward the web hostname to `http://127.0.0.1:8080`. The web Nginx container routes `/api` to the private API container. Redirect HTTP to HTTPS and restrict the server firewall to SSH and HTTPS; PostgreSQL remains on the private Compose network.
+6. Check API readiness at `https://<web-domain>/api/health`; it reports healthy only when PostgreSQL responds. Back up the `postgres_data` database using `pg_dump` and store backups outside this server.
 
 For updates, pull or copy the reviewed application source, then run `docker compose --env-file deploy/.env.production up -d --build api web`. API startup applies pending migrations before serving requests. Back up the database before schema upgrades. The Vite API URL is embedded when the web image is built, so rebuild the web image after changing `VITE_API_BASE_URL`.
 
@@ -35,14 +35,24 @@ For updates, pull or copy the reviewed application source, then run `docker comp
 
 The Compose file includes an optional Cloudflare Tunnel profile. The tunnel makes an outbound connection from the laptop, so the router does not need inbound port forwarding. The laptop must remain powered on, awake, connected to the internet, and running Docker Desktop for the application to be reachable.
 
-1. Create a Cloudflare account and add `krushinathgreenenergy.in`. Review the DNS records Cloudflare detects. If the domain has email or website records, confirm they are present in Cloudflare before changing nameservers. At GoDaddy, replace the domain nameservers with the two Cloudflare assigns; this makes Cloudflare the DNS provider.
-2. In Cloudflare, create a remotely-managed tunnel. Add two published application routes to that tunnel: `sugar.krushinathgreenenergy.in` ? `http://web:80`, and `sugar-api.krushinathgreenenergy.in` ? `http://api:4000`. Keep the apex domain and `www` hostname for the Krushinath main website; it can use another route on the same tunnel once its service is reachable by the connector.
+1. Create a Cloudflare account and add `krushinathgreenenergy.in`. Review the DNS records Cloudflare detects. If the domain has email or website records, confirm they are present in Cloudflare before changing nameservers. At GoDaddy, replace the domain nameservers with the two Cloudflare assigns; this makes Cloudflare the DNS provider. GoDaddy may require KYC verification for a `.in` domain before nameserver changes are available.
+2. In Cloudflare, create a remotely-managed tunnel. Add one published application route: `sugar.krushinathgreenenergy.in` to `http://web:80`. The web container proxies `/api` internally to the API. Keep the apex domain and `www` hostname for the Krushinath main website to configure later.
 3. Copy `deploy/.env.production.example` to `deploy/.env.production`. Keep the real URLs already shown there, replace every secret placeholder locally, and enter the factory-verified opening and cumulative balances. Keep `CONFIRM_INITIAL_BALANCES=false` until those balances are verified.
 4. Put the tunnel token in `CLOUDFLARE_TUNNEL_TOKEN` in that local environment file. Treat it like a password: do not commit it or paste it into chat.
-5. Start Docker Desktop, then run `docker compose --env-file deploy/.env.production --profile tunnel up -d --build db api web cloudflared` from the project root. The Sugar House app is then available at `https://sugar.krushinathgreenenergy.in` and its API at `https://sugar-api.krushinathgreenenergy.in/api` after Cloudflare activates the DNS and tunnel routes.
+5. Start Docker Desktop, then run `docker compose --env-file deploy/.env.production --profile tunnel up -d --build db api web cloudflared` from the project root. The Sugar House app and API are available at `https://sugar.krushinathgreenenergy.in` and `https://sugar.krushinathgreenenergy.in/api` after Cloudflare activates the DNS and tunnel route.
 6. After checking the opening values, set `CONFIRM_INITIAL_BALANCES=true` and run `docker compose --env-file deploy/.env.production --profile tunnel --profile bootstrap run --rm seed` once to create the owner, grades, shifts, and season.
 
 If `docker info` reports that the Docker named pipe is inaccessible, restart Docker Desktop normally and rerun the command from a PowerShell session that has Docker access. Do not expose the PostgreSQL port on the router. To stop the services, run `docker compose --env-file deploy/.env.production --profile tunnel down`; the `postgres_data` volume remains in place.
+
+### Temporary no-domain worker trial
+
+The Compose file also has a temporary Cloudflare Quick Tunnel profile. It creates a random public `trycloudflare.com` URL without waiting for DNS or nameserver activation. Use it only for a short trial: the URL changes on restart, the tunnel has no uptime guarantee, and the PC and Docker Desktop must stay on. App login remains enabled. After local secrets and factory-verified opening balances are configured, start the app with:
+
+```powershell
+docker compose --env-file deploy/.env.production --profile quick up -d --build db api web quick-tunnel
+```
+
+Read the temporary URL from `docker compose --env-file deploy/.env.production --profile quick logs quick-tunnel`. Share that URL with workers. Stop the trial with `docker compose --env-file deploy/.env.production --profile quick down`; the PostgreSQL volume remains. For a stable public address, complete GoDaddy domain verification, activate Cloudflare DNS, and use the permanent tunnel steps above.
 
 ### Managed or separate hosts
 
