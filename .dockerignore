@@ -10,3 +10,4 @@ node_modules
 apps/api/generated
 .git
 tmp
+backups

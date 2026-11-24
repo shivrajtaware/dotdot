@@ -14,7 +14,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
-    networks: [private]
+    networks: [database]
 
   api:
     build:
@@ -29,18 +29,23 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET}
       WEB_ORIGIN: ${WEB_ORIGIN:?Set WEB_ORIGIN to the HTTPS web domain}
       MOBILE_ORIGIN: https://localhost
+      API_TRUST_PROXY_HOPS: 1
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "127.0.0.1:${API_PUBLIC_PORT:-4000}:4000"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 30s
-    networks: [private]
+    networks: [frontend, database]
+    stop_grace_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
 
   web:
     build:
@@ -59,7 +64,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-    networks: [private]
+    networks: [frontend]
 
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -73,17 +78,37 @@ services:
         condition: service_healthy
       web:
         condition: service_healthy
-    networks: [private]
+    networks: [frontend]
 
-  quick-tunnel:
-    image: cloudflare/cloudflared:latest
+  db-backup:
+    build:
+      context: .
+      dockerfile: Dockerfile.backup
     restart: unless-stopped
-    profiles: ["quick"]
-    command: ["tunnel", "--no-autoupdate", "--url", "http://web:80"]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in deploy/.env.production}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in deploy/.env.production}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env.production}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-21600}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/backup.sh", "healthcheck"]
+      interval: 5m
+      timeout: 10s
+      retries: 2
+      start_period: 15m
     depends_on:
-      web:
+      db:
         condition: service_healthy
-    networks: [private]
+    networks: [database]
+    stop_grace_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
 
   seed:
     profiles: ["bootstrap"]
@@ -91,6 +116,7 @@ services:
       context: .
       dockerfile: Dockerfile.api
     restart: "no"
+    command: ["npm", "--workspace", "apps/api", "run", "seed"]
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:?Set POSTGRES_DB}?schema=public
@@ -111,11 +137,13 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    networks: [private]
+    networks: [database]
 
 volumes:
   postgres_data:
 
 networks:
-  private:
+  frontend:
+    driver: bridge
+  database:
     driver: bridge

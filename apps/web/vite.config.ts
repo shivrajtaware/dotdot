@@ -1,9 +1,16 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { fileURLToPath } from 'node:url';
+const productionDemoModule = fileURLToPath(new URL('./src/productionDemoApi.ts', import.meta.url));
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const apiBase = (process.env.VITE_API_BASE_URL || env.VITE_API_BASE_URL || '').trim();
+  const demoMode = process.env.VITE_DEMO_MODE || env.VITE_DEMO_MODE || 'false';
+
+  if (mode === 'production' && demoMode === 'true') {
+    throw new Error('VITE_DEMO_MODE must not be enabled in a production build.');
+  }
 
   if (mode === 'production' && apiBase.startsWith('/')) {
     if (apiBase.replace(/\/+$/, '') !== '/api') {
@@ -25,6 +32,8 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
+    define: { 'import.meta.env.VITE_DEMO_MODE': JSON.stringify(demoMode) },
+    resolve: { alias: mode === 'production' ? [{ find: './demoApi', replacement: productionDemoModule }] : [] },
     plugins: [react(), VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['logo.jpg'],

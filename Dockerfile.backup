@@ -1,0 +1,8 @@
+FROM postgres:16-alpine
+
+COPY --chmod=755 deploy/backup.sh /usr/local/bin/backup.sh
+
+ENV BACKUP_INTERVAL_SECONDS=21600 \
+    BACKUP_RETENTION_DAYS=14
+
+ENTRYPOINT ["/usr/local/bin/backup.sh"]

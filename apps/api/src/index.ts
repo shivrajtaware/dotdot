@@ -18,9 +18,15 @@ import { databaseReadiness } from './readiness';
 const { access: tokenKey, refresh: refreshKey } = validateJwtSecrets(process.env.JWT_SECRET, process.env.JWT_REFRESH_SECRET);
 const prisma = new PrismaClient();
 const app = express();
+const proxyHops = Number(process.env.API_TRUST_PROXY_HOPS ?? 0);
+if (!Number.isSafeInteger(proxyHops) || proxyHops < 0 || proxyHops > 5) {
+  throw new Error('API_TRUST_PROXY_HOPS must be a whole number from 0 to 5.');
+}
+app.set('trust proxy', proxyHops);
 const dayStart = (date: string) => new Date(`${date}T00:00:00.000Z`);
 const dayEnd = (date: string) => new Date(`${date}T23:59:59.999Z`);
 app.use(helmet());
+app.use('/api', (_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 const allowedOrigins = [...(process.env.WEB_ORIGIN || 'http://localhost:5173').split(','), ...(process.env.MOBILE_ORIGIN || 'https://localhost').split(',')].map(x => x.trim()).filter(Boolean);
 const corsForAllowedClients = cors({ origin: (origin, callback) => !origin || allowedOrigins.includes(origin) ? callback(null, true) : callback(new Error('Origin is not allowed.')), credentials: true });
 app.use((req, res, next) => {
@@ -93,7 +99,7 @@ app.post('/api/auth/login', async (req, res) => {
   res.json({ token: sign({ id: user.id, role: user.role, name: user.name }), user: { id: user.id, name: user.name, email: user.email, role: user.role } });
 });
 app.post('/api/auth/refresh',async(req,res)=>{const raw=cookieValue(req,'refresh_token');if(!raw)return res.status(401).json({error:'Please sign in again.'});const hash=refreshHash(raw);const session=await prisma.refreshSession.findUnique({where:{tokenHash:hash},include:{user:true}});if(!session||session.revokedAt||session.expiresAt<new Date()||!session.user.active)return res.status(401).json({error:'Please sign in again.'});const next=randomBytes(48).toString('base64url');const changed=await prisma.refreshSession.updateMany({where:{id:session.id,tokenHash:hash,revokedAt:null,expiresAt:{gt:new Date()}},data:{tokenHash:refreshHash(next),expiresAt:new Date(Date.now()+30*24*60*60*1000)}});if(changed.count!==1)return res.status(401).json({error:'Please sign in again.'});setRefreshCookie(res,next);res.json({token:sign({id:session.user.id,role:session.user.role,name:session.user.name})});});
-app.post('/api/auth/logout',async(req,res)=>{const raw=cookieValue(req,'refresh_token');if(raw)await prisma.refreshSession.updateMany({where:{tokenHash:refreshHash(raw),revokedAt:null},data:{revokedAt:new Date()}});res.clearCookie('refresh_token',{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'strict',path:'/api/auth'});res.json({ok:true});});
+app.post('/api/auth/logout',async(req,res)=>{const raw=cookieValue(req,'refresh_token');if(raw)await prisma.refreshSession.updateMany({where:{tokenHash:refreshHash(raw),revokedAt:null},data:{revokedAt:new Date()}});res.clearCookie('refresh_token',{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:process.env.NODE_ENV==='production'?'none':'strict',path:'/api/auth'});res.json({ok:true});});
 app.get('/api/auth/me', auth, async (req: AuthedRequest, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { id: true, name: true, email: true, role: true } }); res.json({ user });
 });
@@ -542,9 +548,33 @@ app.get('/api/reports/:type.:format(csv|xlsx)', auth, async (req: AuthedRequest,
   if(req.params.format==='xlsx'){const shiftRows:any[][]=[['Register','Date','Shift','Clerk','Status','Production bags','Dispatched bags','Closing bags'],...records.map(r=>[r.registerNo,day(r),r.shiftLabelSnapshot,r.clerkNameSnapshot,r.status,r.stockLines.reduce((a,l)=>a+l.production,0),r.stockLines.reduce((a,l)=>a+l.dispatch,0),r.stockLines.reduce((a,l)=>a+l.closing,0)])];const productionRows:any[][]=[['Register','Date','Shift','Grade','Production bags'],...stockRows.map(({r,l})=>[r.registerNo,day(r),r.shiftLabelSnapshot,l.grade.code,l.production])];const dispatchRows:any[][]=[['Register','Date','Shift','Grade','Bags dispatched'],...stockRows.filter(x=>x.l.dispatch).map(({r,l})=>[r.registerNo,day(r),r.shiftLabelSnapshot,l.grade.code,l.dispatch])];const buffer=buildXlsx([{name:'Selected report',rows},{name:'Shift Records',rows:shiftRows},{name:'Production',rows:productionRows},{name:'Inventory',rows:inventorySheetRows},{name:'Godown Dispatch',rows:dispatchRows},{name:'Cumulative Summary',rows:cumulativeSheetRows}]);res.setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');res.setHeader('Content-Disposition','attachment; filename="sugar-house-'+type+'.xlsx"');return res.send(Buffer.from(buffer));}res.setHeader('Content-Type','text/csv; charset=utf-8');res.setHeader('Content-Disposition',`attachment; filename="sugar-house-${type}.csv"`);res.send('\ufeff'+rows.map(row=>row.map(esc).join(',')).join('\r\n'));
 });
 
-app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => { console.error(err); res.status(500).json({ error: 'A server error occurred. Please try again.' }); });
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  const error = err as { message?: string; status?: number; type?: string };
+  if (error?.message === 'Origin is not allowed.') return res.status(403).json({ error: 'This website is not allowed to access the API.' });
+  if (error?.type === 'entity.parse.failed' || error instanceof SyntaxError && (err as { status?: number }).status === 400) return res.status(400).json({ error: 'The request body is not valid JSON.' });
+  console.error(err);
+  res.status(500).json({ error: 'A server error occurred. Please try again.' });
+});
 const port = Number(process.env.API_PORT || 4000);
-app.listen(port, () => console.log(`Krushinath API listening on ${port}`));
+const server = app.listen(port, () => console.log(`Krushinath API listening on ${port}`));
+server.requestTimeout = 30_000;
+server.headersTimeout = 35_000;
+let shuttingDown = false;
+async function shutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} received; closing the API gracefully.`);
+  const forceClose = setTimeout(() => { console.error('Graceful shutdown timed out.'); process.exit(1); }, 25_000);
+  forceClose.unref();
+  server.close(async error => {
+    try { await prisma.$disconnect(); }
+    catch (disconnectError) { console.error('Database disconnect failed during shutdown.', disconnectError); process.exitCode = 1; }
+    if (error) { console.error('HTTP server shutdown failed.', error); process.exitCode = 1; }
+    clearTimeout(forceClose);
+  });
+}
+process.on('SIGTERM', () => { void shutdown('SIGTERM'); });
+process.on('SIGINT', () => { void shutdown('SIGINT'); });
 
 
 
