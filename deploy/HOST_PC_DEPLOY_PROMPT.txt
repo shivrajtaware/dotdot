@@ -1,54 +1,80 @@
-TASK: Put the Krushinath Green Energy Sugar House application online for real workers from this Windows PC.
+KRUSHINATH SUGAR HOUSE — HOST PC PRODUCTION GO-LIVE PROMPT
 
-The owner has already completed Cloudflare setup and .in domain KYC. Do not send them back through nameserver/KYC setup unless checking the account reveals a specific problem. The app must run on this PC with Docker Desktop, PostgreSQL, and a named Cloudflare Tunnel. No VPS, no temporary tunnel, no new domain.
+You are Codex working in the project folder on the Windows PC that will host the real application. Complete the production deployment autonomously and carefully. The owner is not a developer; give short, exact instructions only when a step truly needs the owner. Do not stop for routine choices you can safely make yourself.
 
-Public app URL: https://sugar.krushinathgreenenergy.in
-Domain registrar/DNS account: GoDaddy domain is already connected to Cloudflare.
-The apex krushinathgreenenergy.in and www are reserved for the separate company website; leave their records unchanged.
+PROJECT AND FIXED PUBLIC ADDRESS
+- GitHub repository: https://github.com/shivrajtaware/dotdot.git
+- Branch: main
+- Worker URL: https://sugar.krushinathgreenenergy.in
+- Domain: krushinathgreenenergy.in, purchased at GoDaddy and already connected/activated in Cloudflare; Cloudflare KYC is complete.
+- The apex domain krushinathgreenenergy.in and www.krushinathgreenenergy.in are reserved for a separate company website. Publish this app only at sugar.krushinathgreenenergy.in.
+- This Windows PC runs Docker Desktop and the app. A named Cloudflare Tunnel makes it available to workers outside the factory Wi-Fi. No VPS, Render, GitHub Pages, temporary trycloudflare URL, new domain, or router port forwarding.
+- Keep the public URL fixed across restarts.
+- Do not build an APK. Do not change Git branches or push from this host PC. The owner will pull this repository's main branch; this prompt is for deploying it.
 
-WORK AUTONOMOUSLY
+FIRST: INSPECT AND PRESERVE
+1. Read README.md and inspect docker-compose.yml, deploy/.env.production.example, deploy/backup.sh, the current branch/commit, Docker state, and Cloudflare zone/tunnels.
+2. Safely update this host PC's project to the latest origin/main. If there are local edits, uncommitted deployment settings, or files that would be overwritten, inspect and preserve them first; never discard, reset, clean, or overwrite them. Production env, database volume, backups, and unrelated project files are private state.
+3. Confirm Docker Desktop is installed with the WSL 2 backend, running Linux containers, and docker info succeeds. Windows Containers are not needed. If Docker is not ready, give the owner the exact installation/startup action needed and continue independent read-only checks.
+4. Keep the project in a stable local folder, not a removable drive or cloud-synced folder.
 
-- Read README.md and inspect the current repo, Docker state, Cloudflare zone, and existing tunnel before making changes. The README is the deployment runbook.
-- Complete every safe, authorized setup and verification step without repeatedly asking for permission. Ask the owner only for information that cannot be discovered locally, such as the factory-verified opening balances, owner account details, or a required account login.
-- Use Cloudflare's already-authenticated dashboard on this PC if a DNS/tunnel setting needs to be configured. Do not ask the owner to paste account passwords or secret tokens into this chat.
-- Never build or generate an APK. Do not push to GitHub, create a release, or change Git branches. The owner will request those separately.
-- Preserve any existing data, production env file, backups, Cloudflare DNS records, and unrelated website settings. Never run `docker compose down -v` or delete Docker volumes.
-
-DNS AND CLOUDFLARE TUNNEL
-
-1. Verify that the Cloudflare zone `krushinathgreenenergy.in` is Active and inspect current records. The owner says Cloudflare/KYC setup is complete, so do not repeat that process if it is already active.
-2. Inspect existing Cloudflare Tunnels. Reuse the intended healthy tunnel if one exists; otherwise create one remotely managed named tunnel.
+CLOUDFLARE, DNS, AND FIXED HOSTNAME
+1. Confirm the Cloudflare zone krushinathgreenenergy.in is Active and inspect DNS records. The owner says Cloudflare is already connected. Do not repeat completed KYC/nameserver setup.
+2. In Cloudflare Zero Trust, inspect existing tunnels and reuse the intended healthy named tunnel if possible. Otherwise create one remotely managed, named tunnel for this app.
 3. Configure exactly this published application route:
-   Hostname: `sugar.krushinathgreenenergy.in`
-   Service: `http://web:80`
-4. Ensure Cloudflare creates/routes the DNS record for that hostname to the tunnel. Do not manually point the hostname at this PC's changing home IP. Do not modify the apex, `www`, email, or any other DNS records.
-5. If Cloudflare requires a tunnel token, get it through the authenticated Cloudflare dashboard and place it directly in the ignored local file `deploy/.env.production`. Do not print it, place it in a command argument, commit it, or send it in chat.
-6. Confirm the DNS route and tunnel health in Cloudflare. The app must use the fixed URL above after restarts.
+   Hostname: sugar.krushinathgreenenergy.in
+   Service: http://web:80
+4. Ensure Cloudflare routes that hostname to the named tunnel. Never point it to the PC's home IP. Do not modify or delete the apex, www, mail, or unrelated DNS records/settings.
+5. Use the authenticated Cloudflare dashboard if available. Do not ask the owner to paste a password, API key, or tunnel token into chat. Put the tunnel token directly in the ignored local deploy/.env.production file only; never show it in terminal output, command arguments, logs, screenshots, Git, or chat.
+6. If dashboard login is required, ask the owner to sign in locally and then continue. Verify the tunnel has healthy connections and the fixed DNS route before declaring it reachable.
 
-PRIVATE SETTINGS AND FACTORY DATA
+PRODUCTION SECRETS AND FIRST-RUN DATA
+1. Check if deploy/.env.production exists. Never overwrite it. If missing, copy deploy/.env.production.example to deploy/.env.production and fill every placeholder locally.
+2. Generate unique strong JWT_SECRET and JWT_REFRESH_SECRET values locally (at least 32 random characters and different from each other). Use a long random alphanumeric POSTGRES_PASSWORD because Compose inserts it into DATABASE_URL. Create a unique owner password (12+ characters, no template value). Never print or transmit these secrets.
+3. Keep WEB_ORIGIN=https://sugar.krushinathgreenenergy.in and VITE_API_BASE_URL=/api. Keep WEB_PUBLIC_PORT bound to localhost (default 8080).
+4. Do not use demo credentials or synthetic demo data in production. Do not invent worker names, factory balances, cumulative values, season dates, or operating records.
+5. The one-time factory seed requires the owner to verify the season and these values against the physical charge book: L30, M30, S1 30, S2 30 opening stock and cumulative values. Keep CONFIRM_INITIAL_BALANCES=false until all are confirmed. Ask the owner to verify/enter them locally in the private env file; never ask them to paste credentials/secrets into chat. Never seed with sample zeros unless the owner explicitly confirms they are correct.
+6. Create only the owner account during initial seed. The owner creates real named worker accounts and assigns the roles supported by the app. Do not create fake employees.
 
-- Confirm whether `deploy/.env.production` already exists. Never overwrite an existing one. If missing, copy `deploy/.env.production.example` to `deploy/.env.production` and fill values locally.
-- Keep `WEB_ORIGIN=https://sugar.krushinathgreenenergy.in` and `VITE_API_BASE_URL=/api`.
-- Generate two distinct strong JWT secrets locally. Set a long random alphanumeric PostgreSQL password because Compose builds the database URL from it. Set unique owner email/password locally. Never display or report secret values.
-- Do not invent factory balances. Ask the owner to verify the season dates plus L30, M30, S1 30, S2 30 opening stock and cumulative values against the physical charge book. Keep `CONFIRM_INITIAL_BALANCES=false` until verified; only then set it true for the one-time seed.
-- Never add fake/demo records to the production database. Keep demo mode disabled.
+START THE PRODUCTION STACK
+1. Before first production start, check existing Docker volumes and backups. Preserve them. Never run docker compose down -v, docker volume prune, docker system prune, a database reset, or a command that deletes production data.
+2. Validate settings without displaying values:
+   docker compose --env-file deploy/.env.production --profile tunnel config --quiet
+3. Build and start the database, API, web app, scheduled backup, and named tunnel:
+   docker compose --env-file deploy/.env.production --profile tunnel up -d --build db api web db-backup cloudflared
+4. Wait for health checks. The API applies checked-in Prisma migrations on startup. Confirm the seed service runs npm --workspace apps/api run seed; never start a second API server for seeding.
+5. Inspect docker compose ps, health endpoint, and recent logs. Redact secrets from all output shared with the owner. Resolve errors; do not skip failed checks.
+6. Verify local app and API/database health:
+   Invoke-WebRequest http://127.0.0.1:8080/
+   Invoke-WebRequest http://127.0.0.1:8080/api/health
+   Health JSON must report status=ok and database=ok.
+7. Only after the owner confirms paper-book values, set CONFIRM_INITIAL_BALANCES=true locally and run the one-time seed:
+   docker compose --env-file deploy/.env.production --profile tunnel --profile bootstrap run --rm seed
+   Verify success without exposing the owner password. Do not rerun it to replace live data or credentials.
+8. Immediately create and validate a backup:
+   docker compose --env-file deploy/.env.production exec -T db-backup /usr/local/bin/backup.sh once
+   Confirm a dated archive exists under backups/ and is readable by pg_restore. Have the owner copy it to separate protected off-PC storage. Local backups alone do not protect against PC loss.
 
-DEPLOY AND VERIFY
+PUBLIC AND WORKER ACCEPTANCE
+1. Verify https://sugar.krushinathgreenenergy.in over HTTPS from a device/network outside the factory Wi-Fi, preferably a phone using cellular data. Check the public /api/health endpoint too. Localhost success does not prove the public tunnel works.
+2. Verify owner sign-in, app navigation, and role access using real accounts created by the owner. Use only disposable/non-production records/accounts if testing writes; never create fake production shifts.
+3. With a separate test database/environment if available, verify essential workflow: draft, submit, chemist assignment/review, manager/owner permissions, approval/locking, carried-forward balances, overnight shift/production date, grade totals, dispatch, handover, audit trail, correction workflow, reports/exports, offline draft and sync, restart recovery, backup restore. Never run test writes or restore drills against live factory data.
+4. Ask the owner/manager and a worker to accept the first live workflow before the team relies on it. Clearly flag anything unverified.
 
-1. Start Docker Desktop if needed, wait for the engine, and confirm `docker info` succeeds. Keep the project in a stable local folder, not a removable or cloud-synced folder.
-2. Validate the private Compose settings without printing them:
-   `docker compose --env-file deploy/.env.production --profile tunnel config --quiet`
-3. Start the production stack, including scheduled backups and the named tunnel:
-   `docker compose --env-file deploy/.env.production --profile tunnel up -d --build db api web db-backup cloudflared`
-4. Wait for health checks. Confirm the backup service becomes healthy and inspect logs with all tokens/passwords redacted. The API startup performs migrations; confirm the seed command is `npm --workspace apps/api run seed` before using its bootstrap profile.
-5. Once the owner verifies all initial values and credentials, run the one-time seed command from README. Never use sample zeros or rerun seed to overwrite live data.
-6. Immediately after seeding, create an on-demand backup using the README command. Confirm a validated archive exists in `backups/` and have the owner copy it to separate protected off-PC storage.
-7. Verify `http://127.0.0.1:8080/api/health` reports a healthy database, then open `https://sugar.krushinathgreenenergy.in` from a phone using cellular data (outside the factory Wi-Fi). Verify login and `/api/health` through the public HTTPS hostname.
-8. With owner-provided test accounts and a separate test database where writes are needed, validate role permissions, shift entry, carry-forward balances, overnight production date, grade totals, dispatch, handover, approvals/locking, audit history, corrections, reports/exports, offline draft sync, backup restore, and restart recovery. Never use test writes in the live factory database.
-9. Set Windows to stay awake while plugged in and Docker Desktop to start at sign-in. No router port forwarding is needed. Ensure Compose does not publish PostgreSQL or API ports publicly.
-
-If a step fails, diagnose it from the exact error and fix the cause. Do not silently skip a failed health check or claim the app is live before testing the public link. If user action is essential (Cloudflare login, copying a token into the local env file, factory balances, or owner credentials), give one short, exact instruction and continue other independent checks.
+HOST UPTIME AND RECOVERY
+1. Configure Docker Desktop to start when the Windows user signs in. Keep the host awake while plugged in and check Windows/network power settings will not suspend the connection. Do not disable updates, antivirus, firewall, or security settings.
+2. No inbound router ports should be opened. PostgreSQL and API must not be published to the host/network; only the web container's localhost port and outbound Cloudflare Tunnel are used.
+3. Perform a controlled Windows restart after an owner-approved time and backup. Sign in, wait for Docker Desktop, then confirm containers and tunnel recover and the same URL works. Do not configure insecure automatic Windows login.
+4. Explain clearly: because the app runs on the owner's PC, power loss, PC shutdown, internet loss, or Windows waiting at the sign-in screen after restart makes it unavailable until the PC and Docker are running again. Do not claim VPS-level uptime.
+5. Explain how the owner can check status, inspect redacted logs, create an on-demand backup, copy backups off-PC, and update later. For updates: make and validate an off-PC backup first, pull reviewed main branch changes without discarding local state, rebuild/up the stack, inspect migrations/logs, and verify health. Never delete the database volume during normal updates.
 
 FINAL REPORT
+Report:
+- Fixed worker URL and whether external cellular access and public /api/health were actually verified.
+- Cloudflare zone, DNS route, tunnel connection, Docker service, and database status.
+- Whether production seed ran; never include credentials or secrets.
+- Backup archive path/date, pg_restore validation, and whether it was copied off-PC.
+- Whether restart recovery and worker/role acceptance were completed.
+- Any unresolved blocker, exact owner action required, and acceptance checks still unverified.
 
-Report the exact fixed URL and evidence for: Cloudflare zone/tunnel/DNS health; public HTTPS access from outside Wi-Fi; Docker service and database health; seed status; backup file and off-PC copy status; host restart recovery; and team workflow acceptance. Clearly state any remaining blocker. Do not build an APK or push to GitHub.
+Be accurate: do not say “live,” “production-ready,” or “accepted” based only on a local page or successful container build. Never build an APK or push from the host PC.
