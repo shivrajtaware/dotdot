@@ -61,6 +61,7 @@ test('register field labels come from administrator configuration and the physic
   assert.throws(() => normalizeOperationalSnapshots(configured, inputs.slice(1)), /five operational counts/);
   assert.deepEqual(preserveOperationalSnapshots(configured.map((label, i) => ({ code: `OP${i + 1}`, labelSnapshot: label })), inputs).map(x => x.labelSnapshot), configured);
   assert.throws(() => preserveOperationalSnapshots(configured.map((label, i) => ({ code: `OP${i + 1}`, labelSnapshot: label })), inputs.slice(1)), /preserve every existing operational field/);
+  assert.deepEqual(normalizeReferenceSnapshots([]), [], 'register reference fields are optional when the worker form omits them.');
   const references = normalizeReferenceSnapshots([1, 2, 3].map(i => ({ code: `REF${i}`, label: 'tampered' })));
   assert.deepEqual(references.map(x => x.labelSnapshot), ['दिनांक ____ चा शेवट नंबर', 'दिनांक ____ चा शेवट नंबर', 'दिनांक ____ (पाळी) चा उत्पादन']);
 });

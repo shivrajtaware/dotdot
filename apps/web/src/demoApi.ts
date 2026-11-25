@@ -8,9 +8,9 @@ const grades = [
   { id: 'grade-s230', code: 'S2-30', label: 'S2 30', order: 3, active: true },
 ];
 const shifts = [
-  { id: 'shift-a', label: 'Morning', startsAt: '06:00', endsAt: '14:00', chemistId: 'chemist-1' },
-  { id: 'shift-b', label: 'Evening', startsAt: '14:00', endsAt: '22:00', chemistId: 'chemist-2' },
-  { id: 'shift-c', label: 'Night', startsAt: '22:00', endsAt: '06:00', chemistId: 'chemist-1' },
+  { id: 'shift-a', label: '4-12', startsAt: '04:00', endsAt: '12:00', chemistId: 'chemist-1' },
+  { id: 'shift-b', label: '12-8', startsAt: '12:00', endsAt: '20:00', chemistId: 'chemist-2' },
+  { id: 'shift-c', label: '8-4', startsAt: '20:00', endsAt: '04:00', chemistId: 'chemist-1' },
 ];
 const season = { id: 'season-demo', name: 'Demo season 2026–27', startDate: '2026-10-01T00:00:00.000Z', active: true, openingStock: { L30: 480, M30: 360, 'S1-30': 240, 'S2-30': 160 }, openingCumulative: { L30: 1250, M30: 980, 'S1-30': 760, 'S2-30': 410 } };
 const user = { id: 'demo-owner', name: 'Demo Owner', email: 'demo@example.test', role: 'OWNER' as const, active: true };
@@ -24,7 +24,7 @@ const stockValues = [
 const stockLines = () => grades.map((grade, i) => ({ id: `line-${i}`, gradeId: grade.id, grade, ...stockValues[i], available: stockValues[i].opening + stockValues[i].production, closing: stockValues[i].opening + stockValues[i].production - stockValues[i].dispatch }));
 const demoRecord = {
   id: 'record-demo-1042', registerNo: 1042, productionDate: `${today}T00:00:00.000Z`, seasonId: season.id,
-  status: 'APPROVED', clerkNameSnapshot: 'Demo Manager', shiftLabelSnapshot: 'Morning',
+  status: 'APPROVED', clerkNameSnapshot: 'Demo Manager', shiftLabelSnapshot: '4-12',
   shift: shifts[0], shiftId: shifts[0].id, shiftStartsAtSnapshot: shifts[0].startsAt, shiftEndsAtSnapshot: shifts[0].endsAt,
   clerk: employees[1], clerkId: employees[1].id, assignedChemistId: 'chemist-1', assignedChemistNameSnapshot: 'A. Patil',
   season, version: 1, scaleCheckTime: '07:15', remarks: 'All figures verified against the shift book.',
@@ -41,7 +41,7 @@ const demoRecord = {
     { id: 'handover-3', kind: 'CHEMIST', userId: 'chemist-1', employeeNameSnapshot: 'A. Patil', employeeRoleSnapshot: 'CHEMIST', acknowledgedAt: new Date().toISOString() },
   ],
 };
-let records: any[] = [demoRecord, ...['Evening', 'Night', 'Morning', 'Evening', 'Night', 'Morning'].map((shiftLabel, i) => ({
+let records: any[] = [demoRecord, ...['12-8', '8-4', '4-12', '12-8', '8-4', '4-12'].map((shiftLabel, i) => ({
   ...demoRecord, id: `record-demo-${1041 - i}`, registerNo: 1041 - i,
   productionDate: `${new Date(Date.now() - (i + 1) * 86400000).toISOString().slice(0, 10)}T00:00:00.000Z`,
   shift: shifts.find((s) => s.label === shiftLabel) || shifts[0], shiftLabelSnapshot: shiftLabel,
@@ -56,21 +56,21 @@ let nextRegister = 1044;
 let demoMovements: any[] = [
   ...stockLines().flatMap((line) => [
     { id: `opening-${line.gradeId}`, grade: line.grade, productionDate: season.startDate, shiftLabel: '—', registerNo: null, type: 'OPENING', quantity: season.openingStock[line.grade.code as keyof typeof season.openingStock] || 0, balanceAfter: line.opening, reason: 'Sample season opening balance', creatorName: 'Demo Owner', createdAt: new Date().toISOString() },
-    { id: `production-${line.gradeId}`, grade: line.grade, productionDate: `${today}T00:00:00.000Z`, shiftLabel: 'Morning', registerNo: demoRecord.registerNo, type: 'PRODUCTION', quantity: line.production, balanceAfter: line.opening + line.production, reason: 'Approved sample register', creatorName: 'Demo Owner', createdAt: new Date().toISOString() },
-    { id: `dispatch-${line.gradeId}`, grade: line.grade, productionDate: `${today}T00:00:00.000Z`, shiftLabel: 'Morning', registerNo: demoRecord.registerNo, type: 'DISPATCH', quantity: -line.dispatch, balanceAfter: line.closing, reason: 'Godown dispatch', creatorName: 'Demo Owner', createdAt: new Date().toISOString() },
+    { id: `production-${line.gradeId}`, grade: line.grade, productionDate: `${today}T00:00:00.000Z`, shiftLabel: '4-12', registerNo: demoRecord.registerNo, type: 'PRODUCTION', quantity: line.production, balanceAfter: line.opening + line.production, reason: 'Approved sample register', creatorName: 'Demo Owner', createdAt: new Date().toISOString() },
+    { id: `dispatch-${line.gradeId}`, grade: line.grade, productionDate: `${today}T00:00:00.000Z`, shiftLabel: '4-12', registerNo: demoRecord.registerNo, type: 'DISPATCH', quantity: -line.dispatch, balanceAfter: line.closing, reason: 'Godown dispatch', creatorName: 'Demo Owner', createdAt: new Date().toISOString() },
   ]),
 ];
 let demoCorrections: any[] = [{ id: 'correction-demo-1', record: { ...records[1], shift: shifts[1] }, requester: { name: 'Demo Manager', role: 'MANAGER' }, reason: 'Sample correction request for preview.', proposedValues: { stock: [{ grade: 'L30', production: 119 }], timeEntries: [{ entryTime: '12:00', bags: 1 }] }, createdAt: new Date().toISOString() }];
 
 const bootstrap = {
-  grades, shifts, seasons: [season], employees, chemists: employees.filter((x) => x.role === 'CHEMIST'),
+  grades, shifts, seasons: [season], employees: employees.filter((x) => x.role === 'MANAGER'), chemists: employees.filter((x) => x.role === 'CHEMIST'),
   settings: { companyName: 'Krushinath Green Energy', factoryName: 'Sugar House', openingStock: season.openingStock, operationalLabels: ['Hopper filled', 'Hopper balance', 'Molasses', 'Road dispatch', 'Road balance'] },
 };
 const dashboard = {
   date: today, totals: { production: 316, closing: 1464, dispatch: 188 }, pending: 1,
   grades: stockLines().map((line) => ({ code: line.grade.code, opening: line.opening, production: line.production, dispatch: line.dispatch, closing: line.closing })),
   shiftStatuses: [{ shiftId: shifts[0].id, registerNo: 1042, status: 'APPROVED', clerk: 'Demo Manager' }, { shiftId: shifts[1].id, registerNo: 1043, status: 'SUBMITTED', clerk: 'A. Patil' }],
-  shifts: [{ shift: 'Morning', production: 316 }, { shift: 'Evening', production: 0 }, { shift: 'Night', production: 0 }],
+  shifts: [{ shift: '4-12', production: 316 }, { shift: '12-8', production: 0 }, { shift: '8-4', production: 0 }],
   monitoring: { season: season.name, daily: Array.from({ length: 7 }, (_, i) => ({ date: new Date(Date.now() - (6 - i) * 86400000).toISOString().slice(0, 10), production: [240, 318, 276, 345, 291, 362, 316][i], dispatch: [172, 214, 190, 236, 182, 243, 188][i] })), grades: grades.map((g, i) => ({ code: g.code, production: [2210, 1830, 1240, 810][i], cumulative: [3460, 2810, 2000, 1220][i] })), cumulativeTotal: 9490 },
   incomplete: 0, recentActivity: [{ id: 'activity-1', action: 'RECORD_APPROVED', user: { name: 'Demo Owner' }, createdAt: new Date().toISOString() }],
 };
@@ -118,7 +118,8 @@ export async function demoApi(path: string, options: RequestInit = {}): Promise<
   if (method !== 'GET') {
     if (clean === '/records') {
       const shift = demoShifts.find((s) => s.id === input.shiftId) || demoShifts[0];
-      const next = { ...demoRecord, id: `record-demo-${nextRegister}`, registerNo: nextRegister++, productionDate: `${input.productionDate || today}T00:00:00.000Z`, seasonId: input.seasonId || season.id, status: 'DRAFT', version: 1, shift, shiftId: shift.id, shiftLabelSnapshot: shift.label, shiftStartsAtSnapshot: shift.startsAt, shiftEndsAtSnapshot: shift.endsAt, clerk: user, clerkId: user.id, clerkNameSnapshot: user.name, scaleCheckTime: input.scaleCheckTime || '', remarks: input.remarks || '', handovers: [], stockLines: (input.stock || []).map((line: any) => { const grade = demoGrades.find((g) => g.id === line.gradeId) || demoGrades[0]; return { ...line, id: `line-${grade.id}`, grade, available: Number(line.opening || 0) + Number(line.production || 0), closing: Number(line.opening || 0) + Number(line.production || 0) - Number(line.dispatch || 0) }; }), timeEntries: (input.timeEntries || []).map((entry: any, i: number) => ({ ...entry, id: `entry-${i}` })), operational: (input.operational || []).map((o: any, i: number) => ({ ...o, id: `op-${i}`, labelSnapshot: o.label })), references: (input.references || []).map((r: any, i: number) => ({ ...r, id: `ref-${i}`, labelSnapshot: r.label })) };
+      const clerk = employees.find((x) => x.id === input.clerkId && x.role === 'MANAGER') || employees.find((x) => x.role === 'MANAGER')!;
+      const next = { ...demoRecord, id: `record-demo-${nextRegister}`, registerNo: nextRegister++, productionDate: `${input.productionDate || today}T00:00:00.000Z`, seasonId: input.seasonId || season.id, status: 'DRAFT', version: 1, shift, shiftId: shift.id, shiftLabelSnapshot: shift.label, shiftStartsAtSnapshot: shift.startsAt, shiftEndsAtSnapshot: shift.endsAt, clerk, clerkId: clerk.id, clerkNameSnapshot: clerk.name, scaleCheckTime: input.scaleCheckTime || '', remarks: input.remarks || '', handovers: [], stockLines: (input.stock || []).map((line: any) => { const grade = demoGrades.find((g) => g.id === line.gradeId) || demoGrades[0]; return { ...line, id: `line-${grade.id}`, grade, available: Number(line.opening || 0) + Number(line.production || 0), closing: Number(line.opening || 0) + Number(line.production || 0) - Number(line.dispatch || 0) }; }), timeEntries: (input.timeEntries || []).map((entry: any, i: number) => ({ ...entry, id: `entry-${i}` })), operational: (input.operational || []).map((o: any, i: number) => ({ ...o, id: `op-${i}`, labelSnapshot: o.label })), references: (input.references || []).map((r: any, i: number) => ({ ...r, id: `ref-${i}`, labelSnapshot: r.label })) };
       records.unshift(next);
       return { record: next };
     }
@@ -138,7 +139,7 @@ export async function demoApi(path: string, options: RequestInit = {}): Promise<
     if (clean.startsWith('/admin/shifts/')) { const target = demoShifts.find((x) => x.id === recordId); if (target) Object.assign(target, input); return { shift: target || demoShifts[0] }; }
     if (clean.startsWith('/corrections/') && clean.endsWith('/approve')) { demoCorrections = demoCorrections.filter((x) => x.id !== recordId); return { affectedRecords: 1 }; }
     if (clean.startsWith('/corrections/') && clean.endsWith('/reject')) { demoCorrections = demoCorrections.filter((x) => x.id !== recordId); return { ok: true }; }
-    if (clean.startsWith('/records/')) { const r = records.find((x) => x.id === recordId); if (r) Object.assign(r, input); return { record: r || demoRecord }; }
+    if (clean.startsWith('/records/')) { const r = records.find((x) => x.id === recordId); if (r) { Object.assign(r, input); if (input.clerkId) { const clerk = employees.find((x) => x.id === input.clerkId); if (clerk) { r.clerk = clerk; r.clerkNameSnapshot = clerk.name; } } } return { record: r || demoRecord }; }
     throw new Error('This demo action is unavailable. No production data was changed.');
   }
   if (clean === '/auth/login' || clean === '/auth/refresh') return { token: 'demo-session', user };

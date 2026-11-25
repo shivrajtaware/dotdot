@@ -18,6 +18,8 @@ Requirements: Node.js 20+, PostgreSQL 15+, and (for Android project generation) 
 
 The initial owner password is hashed. Re-running the seed will not replace the owner password or overwrite an existing season's balances.
 
+For a **local preview with synthetic data only**, use a database named `krushinath_local_dev` on localhost, set `DEMO_SEED_PASSWORD` in `apps/api/.env`, and run `npm --workspace apps/api run db:seed:demo` once against an empty database. The script refuses other database names, non-loopback hosts, production mode, or any database containing existing data. Set `VITE_DEMO_MODE=false` in `apps/web/.env` and `VITE_API_BASE_URL=http://localhost:4000/api` so the web app uses the API and PostgreSQL. Demo accounts are `demo-owner@example.test`, `demo.manager1@example.test`, `demo.manager2@example.test`, `demo.chemist1@example.test`, `demo.chemist2@example.test`, and `demo.viewer@example.test`; they all use the local `DEMO_SEED_PASSWORD`. Every seeded balance and shift record is explicitly synthetic and must not be used for factory operations.
+
 ## Production: dedicated Windows PC + Docker Desktop + Cloudflare Tunnel
 
 This is the intended no-VPS setup. The PC runs the app and PostgreSQL. Cloudflare Tunnel publishes only the web app over an outbound connection, so no router port forwarding is needed. Use Docker Desktop with Linux containers/WSL 2. Keep the PC powered, awake, online, and Docker Desktop running; if the PC or its internet connection stops, the app becomes unavailable.

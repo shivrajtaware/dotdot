@@ -80,6 +80,7 @@ export function preserveOperationalSnapshots(existing: Array<{ code: string; lab
 }
 const registerReferenceLabels = ['दिनांक ____ चा शेवट नंबर', 'दिनांक ____ चा शेवट नंबर', 'दिनांक ____ (पाळी) चा उत्पादन'];
 export function normalizeReferenceSnapshots(inputs: Array<{ code: string; label: string; referenceDate?: string; numberValue?: number }>) {
+  if (inputs.length === 0) return [];
   if (inputs.length !== registerReferenceLabels.length || new Set(inputs.map(input => input.code)).size !== registerReferenceLabels.length) {
     throw new Error('Provide each of the three register references once.');
   }

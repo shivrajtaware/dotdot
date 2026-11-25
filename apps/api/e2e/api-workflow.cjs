@@ -116,6 +116,7 @@ async function main() {
     productionDate: date,
     shiftId: shift.id,
     seasonId: season.id,
+    clerkId: manager.id,
     scaleCheckTime: '11:55',
     stock: bootstrap.data.grades.map(g => ({
       gradeId: g.id,
@@ -123,10 +124,14 @@ async function main() {
       production: g.id === grade.id ? 50 : 0,
       dispatch: g.id === grade.id ? 30 : 0
     })),
-    timeEntries: [],
+    timeEntries: [{ entryTime: '11:00', fromNumber: 1, toNumber: 20, bags: 20 }],
     operational: bootstrap.data.settings.operationalLabels.map((_label, i) => ({ code: 'OP' + (i + 1), label: 'tampered label', bags: 0 })),
     references: [1, 2, 3].map(i => ({ code: 'REF' + i, label: 'tampered reference', numberValue: 0 }))
   };
+  const wrongClerk = await call('POST', '/records', { token: managerSession.token, body: { ...payload, offlineId: 'e2e-wrong-clerk-' + suffix, clerkId: secondManager.id } });
+  assert.equal(wrongClerk.response.status, 403, 'A manager cannot attribute a register to another employee account.');
+  const invalidOwnerClerk = await call('POST', '/records', { token: owner.token, body: { ...payload, offlineId: 'e2e-invalid-owner-clerk-' + suffix, clerkId: chemist.id } });
+  assert.equal(invalidOwnerClerk.response.status, 400, 'Only an active registered Sugar House Manager can be selected as the clerk.');
   const beforeSeason = new Date(new Date(season.startDate).getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   assert.equal((await call('POST', '/records', { token: managerSession.token, body: { ...payload, productionDate: beforeSeason } })).response.status, 400,
     'The API rejects new records dated before the selected season begins.');
@@ -139,6 +144,8 @@ async function main() {
   assert.equal(repeatedCreate.response.status, 200, 'A repeated offline request returns its original server record.');
   assert.equal(repeatedCreate.data.record.id, recordId, 'Idempotent create does not allocate a second register.');
   assert.equal(draft.data.record.registerNo, configuredRegisterNo, 'New registers use the configured sequence.');
+  assert.equal(draft.data.record.clerkId, manager.id, 'The register is linked to the selected manager account.');
+  assert.equal(draft.data.record.clerkNameSnapshot, 'E2E Manager One', 'The clerk name is captured from the registered account.');
   const savedDraft = await call('GET', '/records/' + recordId, { token: managerSession.token });
   assert.deepEqual(savedDraft.data.record.operational.map(item => item.labelSnapshot), bootstrap.data.settings.operationalLabels,
     'Managers cannot overwrite administrator-configured operational labels.');
@@ -151,10 +158,11 @@ async function main() {
   assert.equal((await call('GET', '/dashboard?date=' + date, { token: secondManagerSession.token })).data.incomplete, 0, 'Manager draft counts remain private to that manager.');
   const mismatchedSubmit = await call('POST', '/records/' + recordId + '/submit', { token: managerSession.token, body: {} });
   assert.equal(mismatchedSubmit.response.status, 409, 'A production register with no time-wise number entries cannot be submitted.');
-  assert.match(mismatchedSubmit.data.error, /Time-wise production total/);
+  assert.match(mismatchedSubmit.data.error, /Time-wise production total/);  const partialDraftUpdate = await call('PUT', '/records/' + recordId, { token: managerSession.token, body: { ...payload, expectedVersion: 1 } });
+  assert.equal(partialDraftUpdate.response.status, 200, 'An incomplete number-entry section remains saveable as a draft.');
   const correctedDraft = await call('PUT', '/records/' + recordId, {
     token: managerSession.token,
-    body: { ...payload, timeEntries: [{ entryTime: '11:00', fromNumber: 1, toNumber: 50, bags: 50 }], expectedVersion: 1 }
+    body: { ...payload, timeEntries: [{ entryTime: '11:00', fromNumber: 1, toNumber: 50, bags: 50 }], expectedVersion: 2 }
   });
   assert.equal(correctedDraft.response.status, 200, 'The manager can complete the time-wise entries before submission.');
   assert.equal((await call('POST', '/records/' + recordId + '/submit', { token: managerSession.token, body: {} })).response.status, 409,
@@ -193,6 +201,9 @@ async function main() {
     'Concurrent approval requests must transition and post inventory exactly once.');
   const approval = simultaneousApprovals.find(result => result.response.status === 200);
   assert.equal(approval.data.record.status, 'LOCKED');
+  const finalizedRecords = await call('GET', '/records?status=FINALIZED&from=' + date + '&to=' + date, { token: owner.token });
+  assert.equal(finalizedRecords.response.status, 200);
+  assert.ok(finalizedRecords.data.records.some(record => record.id === recordId), 'The user-facing Approved filter includes locked records.');
   const postedMovements = await call('GET', '/reports/movement.csv?from=' + date + '&to=' + date, { token: owner.token });
   assert.equal(postedMovements.response.status, 200);
   const movementsForRegister = postedMovements.data.split(/\r?\n/).filter(line => line.split(',')[7] === '"' + configuredRegisterNo + '"');
@@ -335,7 +346,22 @@ async function main() {
   assert.match(movementReport.data, /"Transaction","Date","Shift","Grade","Type","Quantity","Balance after","Register","Employee","Reason","Created at"/);
   assert.match(movementReport.data, new RegExp(shift.label));
 
-  console.log('API E2E passed: role isolation, handover, locking, corrections, historical snapshots, dashboard, stock, audit, movement export, XLSX and session revocation.');
+  const nextShift = bootstrap.data.shifts.find(item => item.id !== shift.id);
+  const nextOpening = await call('GET', '/inventory/opening?date=' + date + '&shiftId=' + nextShift.id + '&seasonId=' + season.id, { token: owner.token });
+  assert.equal(nextOpening.response.status, 200);
+  const ownerAssignedDraft = await call('POST', '/records', { token: owner.token, body: {
+    offlineId: 'e2e-owner-assigned-' + suffix, productionDate: date, shiftId: nextShift.id, seasonId: season.id, clerkId: manager.id,
+    stock: bootstrap.data.grades.map(g => ({ gradeId: g.id, opening: Number(nextOpening.data.opening[g.id] || 0), production: 0, dispatch: 0 })),
+    timeEntries: [], operational: bootstrap.data.settings.operationalLabels.map((label, i) => ({ code: 'OP' + (i + 1), label, bags: 0 })),
+    references: [1, 2, 3].map(i => ({ code: 'REF' + i, label: 'reference', numberValue: 0 }))
+  } });
+  assert.equal(ownerAssignedDraft.response.status, 201, 'Owner can create a record for a selected active manager account: ' + JSON.stringify(ownerAssignedDraft.data));
+  assert.equal(ownerAssignedDraft.data.record.clerkId, manager.id);
+  assert.equal(ownerAssignedDraft.data.record.clerkNameSnapshot, 'E2E Renamed Manager');
+  const ownerAssignmentAudit = await call('GET', '/audit?recordId=' + ownerAssignedDraft.data.record.id, { token: owner.token });
+  assert.ok(ownerAssignmentAudit.data.entries.some(entry => entry.action === 'RECORD_CREATED' && entry.userId === owner.user.id), 'Audit attributes record creation to the signed-in owner, not the selected clerk.');
+
+  console.log('API E2E passed: role isolation, selected clerk attribution, handover, locking, corrections, historical snapshots, dashboard, stock, audit, movement export, XLSX and session revocation.');
 }
 
 main().catch(error => { console.error(error.stack || error); process.exit(1); });

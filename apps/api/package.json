@@ -8,6 +8,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:dev": "prisma migrate dev",
+    "db:seed:demo": "npm run build && node dist/seedDemo.js",
     "test": "npm run build && node --test tests/*.test.cjs",
     "test:e2e": "node e2e/api-workflow.cjs",
     "seed": "tsx prisma/seed.ts"
